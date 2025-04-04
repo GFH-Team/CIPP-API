@@ -1,13 +1,42 @@
 function Invoke-CIPPStandardPasswordExpireDisabled {
     <#
     .FUNCTIONALITY
-    Internal
+        Internal
+    .COMPONENT
+        (APIName) PasswordExpireDisabled
+    .SYNOPSIS
+        (Label) Do not expire passwords
+    .DESCRIPTION
+        (Helptext) Disables the expiration of passwords for the tenant by setting the password expiration policy to never expire for any user.
+        (DocsDescription) Sets passwords to never expire for tenant, recommended to use in conjunction with secure password requirements.
+    .NOTES
+        CAT
+            Entra (AAD) Standards
+        TAG
+            "CIS"
+            "PWAgePolicyNew"
+        ADDEDCOMPONENT
+        IMPACT
+            Low Impact
+        ADDEDDATE
+            2021-11-16
+        POWERSHELLEQUIVALENT
+            Update-MgDomain
+        RECOMMENDEDBY
+            "CIS"
+            "CIPP"
+        UPDATECOMMENTBLOCK
+            Run the Tools\Update-StandardsComments.ps1 script to update this comment block
+    .LINK
+        https://docs.cipp.app/user-documentation/tenant/standards/list-standards/entra-aad-standards#low-impact
     #>
+
     param($Tenant, $Settings)
+
     $GraphRequest = New-GraphGetRequest -uri 'https://graph.microsoft.com/v1.0/domains' -tenantid $Tenant
     $DomainswithoutPassExpire = $GraphRequest | Where-Object -Property passwordValidityPeriodInDays -NE '2147483647'
 
-    If ($Settings.remediate -eq $true) {
+    if ($Settings.remediate -eq $true) {
 
         if ($DomainswithoutPassExpire) {
             $DomainswithoutPassExpire | ForEach-Object {
@@ -21,7 +50,8 @@ function Invoke-CIPPStandardPasswordExpireDisabled {
                     New-GraphPostRequest -type Patch -tenantid $Tenant -uri "https://graph.microsoft.com/v1.0/domains/$($_.id)" -body $Body
                     Write-LogMessage -API 'Standards' -tenant $tenant -message "Disabled Password Expiration for $($_.id)." -sev Info
                 } catch {
-                    Write-LogMessage -API 'Standards' -tenant $tenant -message "Failed to disable Password Expiration for $($_.id). Error: $($_.exception.message)" -sev Error
+                    $ErrorMessage = Get-NormalizedError -Message $_.Exception.Message
+                    Write-LogMessage -API 'Standards' -tenant $tenant -message "Failed to disable Password Expiration for $($_.id). Error: $ErrorMessage" -sev Error
                 }
             }
         } else {
@@ -32,7 +62,8 @@ function Invoke-CIPPStandardPasswordExpireDisabled {
 
     if ($Settings.alert -eq $true) {
         if ($DomainswithoutPassExpire) {
-            Write-LogMessage -API 'Standards' -tenant $tenant -message "Password Expiration is not disabled for the following $($DomainswithoutPassExpire.Count) domains: $($DomainswithoutPassExpire.id -join ', ')" -sev Alert
+            Write-StandardsAlert -message "Password Expiration is not disabled for the following $($DomainswithoutPassExpire.Count) domains: $($DomainswithoutPassExpire.id -join ', ')" -object $DomainswithoutPassExpire -tenant $tenant -standardName 'PasswordExpireDisabled' -standardId $Settings.standardId
+            Write-LogMessage -API 'Standards' -tenant $tenant -message "Password Expiration is not disabled for the following $($DomainswithoutPassExpire.Count) domains: $($DomainswithoutPassExpire.id -join ', ')" -sev Info
         } else {
             Write-LogMessage -API 'Standards' -tenant $tenant -message "Password Expiration is disabled for all $($GraphRequest.Count) domains." -sev Info
         }
@@ -40,5 +71,11 @@ function Invoke-CIPPStandardPasswordExpireDisabled {
 
     if ($Settings.report -eq $true) {
         Add-CIPPBPAField -FieldName 'PasswordExpireDisabled' -FieldValue $DomainswithoutPassExpire -StoreAs json -Tenant $tenant
+        if ($DomainswithoutPassExpire) {
+            $FieldValue = $DomainswithoutPassExpire
+        } else {
+            $FieldValue = $true
+        }
+        Set-CIPPStandardsCompareField -FieldName 'standards.PasswordExpireDisabled' -FieldValue $FieldValue -Tenant $tenant
     }
 }

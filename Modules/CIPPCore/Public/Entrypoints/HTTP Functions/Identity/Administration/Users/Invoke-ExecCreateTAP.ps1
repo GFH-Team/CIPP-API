@@ -1,28 +1,35 @@
 using namespace System.Net
 
 Function Invoke-ExecCreateTAP {
-      <#
+    <#
     .FUNCTIONALITY
-    Entrypoint
+        Entrypoint
+    .ROLE
+        Identity.User.ReadWrite
     #>
-      [CmdletBinding()]
-      param($Request, $TriggerMetadata)
+    [CmdletBinding()]
+    param($Request, $TriggerMetadata)
 
-      $APIName = $TriggerMetadata.FunctionName
-      Write-LogMessage -user $request.headers.'x-ms-client-principal' -API $APINAME -message 'Accessed this API' -Sev 'Debug'
+    $APIName = $Request.Params.CIPPEndpoint
+    $Headers = $Request.Headers
+    Write-LogMessage -headers $Headers -API $APIName -message 'Accessed this API' -Sev 'Debug'
 
-      # Interact with query parameters or the body of the request.
-      try {
-            $TAP = New-CIPPTAP -userid $Request.query.ID -TenantFilter $Request.query.tenantfilter -APIName $APINAME -ExecutingUser $request.headers.'x-ms-client-principal'
-            $Results = [pscustomobject]@{'Results' = "$TAP" }
-      } catch {
-            $Results = [pscustomobject]@{'Results' = "Failed. $($_.Exception.Message)" }
-      }
+    # Interact with query parameters or the body of the request.
+    $TenantFilter = $Request.Query.tenantFilter ?? $Request.Body.tenantFilter
+    $UserID = $Request.Query.ID ?? $Request.Body.ID
 
-      # Associate values to output bindings by calling 'Push-OutputBinding'.
-      Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
-                  StatusCode = [HttpStatusCode]::OK
-                  Body       = $Results
-            })
+    try {
+        $Result = New-CIPPTAP -userid $UserID -TenantFilter $TenantFilter -APIName $APIName -Headers $Headers
+        $StatusCode = [HttpStatusCode]::OK
+    } catch {
+        $Result = "$($_.Exception.Message)"
+        $StatusCode = [HttpStatusCode]::InternalServerError
+    }
+
+    # Associate values to output bindings by calling 'Push-OutputBinding'.
+    Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
+            StatusCode = $StatusCode
+            Body       = @{'Results' = $Result }
+        })
 
 }

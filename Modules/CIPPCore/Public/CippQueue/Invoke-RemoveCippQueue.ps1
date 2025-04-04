@@ -2,14 +2,13 @@ function Invoke-RemoveCippQueue {
     <#
     .FUNCTIONALITY
         Entrypoint
+    .ROLE
+        CIPP.Core.ReadWrite
     #>
     param($Request, $TriggerMetadata)
 
-    $APIName = $TriggerMetadata.FunctionName
-    Write-LogMessage -user $request.headers.'x-ms-client-principal' -API $APINAME -message 'Accessed this API' -Sev 'Debug'
-
-    # Write to the Azure Functions log stream.
-    Write-Host 'PowerShell HTTP trigger function processed a request.'
+    $APIName = $Request.Params.CIPPEndpoint
+    Write-LogMessage -headers $Request.Headers -API $APINAME -message 'Accessed this API' -Sev 'Debug'
 
     $CippQueue = Get-CippTable -TableName 'CippQueue'
     Clear-AzDataTable @CippQueue
